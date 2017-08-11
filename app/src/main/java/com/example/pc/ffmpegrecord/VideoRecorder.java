@@ -103,9 +103,9 @@ public class VideoRecorder extends Activity implements SurfaceHolder.Callback, a
             public void onClick(View view) {
 
                 mIsRecording = !mIsRecording;
-                if(mIsRecording) {
-                   new Thread(new Encoder()).start();
-                }
+//                if(mIsRecording) {
+//                   new Thread(new Encoder()).start();
+//                }
             }
         });
 
@@ -197,6 +197,11 @@ public class VideoRecorder extends Activity implements SurfaceHolder.Callback, a
 
     @Override
     public void onPreviewFrame(byte[] bytes, android.hardware.Camera camera) {
+
+        if(mIsRecording) {
+            fFmpeg.offer(bytes);
+        }
+
 //        if(null != mStreamTask){
 //            switch(mStreamTask.getStatus()){
 //                case RUNNING:
@@ -206,23 +211,23 @@ public class VideoRecorder extends Activity implements SurfaceHolder.Callback, a
 //                    break;
 //            }
 //        }
-        if(mIsRecording) {
-            lists.add(bytes);
-        }
+//        if(mIsRecording) {
+//            lists.add(bytes);
+//        }
 
     }
 
-    class Encoder implements Runnable{
-        @Override
-        public void run() {
-
-            while (null!=lists||mIsRecording){
-                if(lists.size()>0) {
-                    fFmpeg.encode(lists.remove(0));
-                }
-            }
-        }
-    }
+//    class Encoder implements Runnable{
+//        @Override
+//        public void run() {
+//
+//            while (null!=lists||mIsRecording){
+//                if(lists.size()>0) {
+//                    fFmpeg.encode(lists.remove(0));
+//                }
+//            }
+//        }
+//    }
 
 
     private class StreamTask extends AsyncTask<Void, Void, Void> {

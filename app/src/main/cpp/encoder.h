@@ -5,8 +5,7 @@
 #ifndef FFMPEGRECORD_ENCODER_H
 #define FFMPEGRECORD_ENCODER_H
 
-
-#include "../../../../../../../../../../android/AndroidSDK/ndk-bundle/sources/cxx-stl/gnu-libstdc++/4.9/include/cstdint"
+#include "base_include.h"
 
 class encoder {
 private:

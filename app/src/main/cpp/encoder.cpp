@@ -3,3 +3,10 @@
 //
 
 #include "encoder.h"
+
+#include <pthread.h>
+void startThread(){
+//    pthread_t thread;
+//    pthread_create(&thread, NULL, offer, this);
+
+}

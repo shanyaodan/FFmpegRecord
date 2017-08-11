@@ -7,7 +7,7 @@
 
 #ifndef JIANXIFFMPEG_BASE_INCLUDE_H
 #define JIANXIFFMPEG_BASE_INCLUDE_H
-#include "jni.h"
+
 extern "C"
 {
 #include <libswscale/swscale.h>
@@ -21,6 +21,8 @@ extern "C"
 }
 
 #include "threadsafe_queue.cpp"
+#include <jni.h>
+#include <string>
 
 #define END_STATE 1
 #define START_STATE 0

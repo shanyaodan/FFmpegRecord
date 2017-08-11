@@ -20,6 +20,7 @@ add_library( # Sets the name of the library.
              src/main/cpp/native-lib.cpp
              src/main/cpp/threadsafe_queue.cpp
              src/main/cpp/base_include.h
+             src/main/cpp/encoder.cpp
               )
 
 # Searches for a specified prebuilt library and stores the path as a

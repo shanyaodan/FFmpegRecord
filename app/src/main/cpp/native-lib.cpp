@@ -3,8 +3,10 @@
 
 #include <android/log.h>
 #include "native-lib.h"
+#include "threadsafe_queue.cpp"
 #define LOGE(format, ...)  __android_log_print(ANDROID_LOG_ERROR, "(>_<)ws-----------", format, ##__VA_ARGS__)
 #define LOGI(format, ...)  __android_log_print(ANDROID_LOG_INFO,  "(^_^)ws-----------", format, ##__VA_ARGS__)
+using namespace std;
 
 
 
@@ -38,10 +40,11 @@ JNIEXPORT void JNICALL
 Java_com_example_pc_ffmpegrecord_FFmpeg_offer(JNIEnv *env, jobject instance, jbyteArray onframe_) {
     jbyte *onframe = env->GetByteArrayElements(onframe_, NULL);
 
+    int in_y_size = yuv_width * yuv_height;
 
-     av_codec_is_encoder()
-
-
+    uint8_t *new_buf = (uint8_t *) malloc(in_y_size * 3 / 2);
+    memcpy(new_buf, onframe_, in_y_size * 3 / 2);
+    frame_queue.push(new_buf);
     env->ReleaseByteArrayElements(onframe_, onframe, 0);
 }
 
@@ -111,6 +114,67 @@ Java_com_example_pc_ffmpegrecord_FFmpeg_encode(JNIEnv *env, jobject instance,
 
 }
 
+void* startEncoder(void *){
+    int ret;
+    int enc_got_frame = 0;
+    int i = 0;
+
+    pFrameYUV = av_frame_alloc();//旧版 avcodec_alloc_frame()
+    uint8_t *out_buffer = (uint8_t *) av_malloc(
+            avpicture_get_size(AV_PIX_FMT_YUV420P, pCodecCtx->width, pCodecCtx->height));
+    avpicture_fill((AVPicture *) pFrameYUV, out_buffer, AV_PIX_FMT_YUV420P, pCodecCtx->width,
+                   pCodecCtx->height);
+
+    //安卓摄像头数据为NV21格式，此处将其转换为YUV420P格式
+    uint8_t * in = (uint8_t *) frame_queue.wait_and_pop().get();
+    memcpy(pFrameYUV->data[0], in, y_length);
+    for (i = 0; i < uv_length; i++) {
+        *(pFrameYUV->data[2] + i) = *(in + y_length + i * 2);
+        *(pFrameYUV->data[1] + i) = *(in + y_length + i * 2 + 1);
+    }
+
+    pFrameYUV->format = AV_PIX_FMT_YUV420P;
+    pFrameYUV->width = yuv_width;
+    pFrameYUV->height = yuv_height;
+
+    enc_pkt.data = NULL;
+    enc_pkt.size = 0;
+    av_init_packet(&enc_pkt);
+    ret = avcodec_encode_video2(pCodecCtx, &enc_pkt, pFrameYUV, &enc_got_frame);
+    av_frame_free(&pFrameYUV);
+
+    if (enc_got_frame == 1) {
+        LOGI("Succeed to encode frame: %5d\tsize:%5d\n", framecnt, enc_pkt.size);
+        framecnt++;
+        enc_pkt.stream_index = video_st->index;
+
+        //Write PTS
+        AVRational time_base = ofmt_ctx->streams[0]->time_base;//{ 1, 1000 };
+        AVRational r_framerate1 = {60, 2};//{ 50, 2 };
+        AVRational time_base_q = {1, AV_TIME_BASE};
+        //Duration between 2 frames (us)
+        int64_t calc_duration = (double) (AV_TIME_BASE) * (1 / av_q2d(r_framerate1));    //内部时间戳
+        //Parameters
+        //enc_pkt.pts = (double)(framecnt*calc_duration)*(double)(av_q2d(time_base_q)) / (double)(av_q2d(time_base));
+        enc_pkt.pts = av_rescale_q(framecnt * calc_duration, time_base_q, time_base);
+        enc_pkt.dts = enc_pkt.pts;
+        enc_pkt.duration = av_rescale_q(calc_duration, time_base_q,
+                                        time_base); //(double)(calc_duration)*(double)(av_q2d(time_base_q)) / (double)(av_q2d(time_base));
+        enc_pkt.pos = -1;
+
+        //Delay
+        int64_t pts_time = av_rescale_q(enc_pkt.dts, time_base, time_base_q);
+        int64_t now_time = av_gettime() - start_time;
+        if (pts_time > now_time)
+            av_usleep(pts_time - now_time);
+
+        ret = av_interleaved_write_frame(ofmt_ctx, &enc_pkt);
+        av_free_packet(&enc_pkt);
+    }
+
+
+}
+
 JNIEXPORT jint JNICALL
 Java_com_example_pc_ffmpegrecord_FFmpeg_flush(JNIEnv *env, jobject instance) {
 
@@ -160,6 +224,7 @@ Java_com_example_pc_ffmpegrecord_FFmpeg_flush(JNIEnv *env, jobject instance) {
     return 0;
 
 }
+
 
 JNIEXPORT jint JNICALL
 Java_com_example_pc_ffmpegrecord_FFmpeg_close(JNIEnv *env, jobject instance) {
@@ -250,14 +315,23 @@ Java_com_example_pc_ffmpegrecord_FFmpeg_initial(JNIEnv *env, jobject instance, j
     avformat_write_header(ofmt_ctx, NULL);
 
     start_time = av_gettime();
+    pthread_t thread;
+    pthread_create(&thread, NULL, startEncoder, NULL);
+
     return 0;
 
 }
+
+
 
 JNIEXPORT jstring JNICALL
 Java_com_example_pc_ffmpegrecord_FFmpeg_test123(JNIEnv *env, jobject instance) {
 
     std::string hello = "Hello from C++";
+//
+//        pthread_t thread;
+//       pthread_create(&thread, NULL, run, NULL);
+
     return env->NewStringUTF(hello.c_str());
 }
 
